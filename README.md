@@ -7,144 +7,130 @@
 [![PostgreSQL](https://img.shields.io/badge/Database-PostgreSQL-4169E1?style=flat&logo=postgresql&logoColor=white)](https://www.postgresql.org/)
 [![License](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 
-An intelligent, data-driven auto-scaling engine deployed on AWS that replaces traditional reactive, threshold-based scaling with transparent, closed-form predictive models derived via **Symbolic Regression (PySR)**.
+An intelligent, data-driven auto-scaling engine deployed on AWS that replaces reactive, threshold-based scaling with transparent, closed-form predictive models discovered via **Symbolic Regression (PySR)**.
 
 ---
 
-## 📌 Executive Summary
+## Abstract
 
-Traditional cloud auto-scalers react *after* resource utilization thresholds are crossed, resulting in SLA degradation during sudden traffic surges and excessive expenditure during idle periods. 
+Traditional cloud elasticity controllers rely on threshold-based, reactive scaling rules (e.g., CPU utilization > 70%). These mechanisms introduce scaling lag during non-stationary traffic spikes, causing Service Level Agreement (SLA) violations, and trigger unnecessary resource allocation during transient bursts.
 
-This project implements a proactive **MAPE-K control loop** in **AWS Lambda** that predicts demand patterns **5–15 minutes in advance**. By utilizing closed-form mathematical equations discovered from **1M+ historical CloudWatch records**, it achieves **sub-90ms inference** without the cold-start and black-box overhead of deep neural networks.
+This repository implements a proactive **MAPE-K (Monitor-Analyze-Plan-Execute-Knowledge) control loop** hosted on **AWS Lambda**. By executing closed-form equations derived from **1,000,000+ historical AWS CloudWatch telemetry points**, the system anticipates resource demands **5 to 15 minutes ahead of workload surges**, delivering sub-90ms execution latency without the inference overhead, memory footprint, or cold-start penalties of deep neural networks.
 
 ---
 
-## 📊 Benchmark Results (30-Day Production Evaluation)
+## Empirical Benchmark Results
 
-Tested against standard AWS CloudWatch Reactive Auto-Scaling across 3 Availability Zones:
+Evaluated over a continuous 30-day production benchmark across 3 Availability Zones against standard AWS CloudWatch Reactive Auto-Scaling policies:
 
-| Metric | AWS Reactive Baseline | Smart Auto-Scaling | Impact |
+| Metric | Reactive Baseline | Smart Auto-Scaling | Delta / Impact |
 | :--- | :---: | :---: | :---: |
-| **Monthly Infrastructure Cost** | \$9,840 | **\$7,350** | **-25.3% (\$2,490/mo saved)** |
-| **Peak Latency (P99)** | 450 ms | **180 ms** | **-60.0% faster** |
-| **Thrashing Frequency** | 8.1 actions/hr | **2.3 actions/hr** | **-71.6% fewer oscillations** |
-| **Average Instance Utilization** | 62.0% | **78.0%** | **+25.8% resource efficiency** |
-| **SLA Compliance Rate** | 97.2% | **99.7%** | **+2.5% reliability gain** |
-| **System Uptime** | 99.8% | **99.95%** | Exceeds 99.9% target |
-| **Inference / Scaling Latency** | N/A (reactive) | **87 ms / 73 s** | Full scale-out under 90s SLA |
+| **Monthly Compute Expenditure** | \$9,840 | **\$7,350** | **-25.3% (\$2,490/month)** |
+| **Tail Latency (P99)** | 450 ms | **180 ms** | **-60.0% latency reduction** |
+| **Oscillation / Thrashing Rate** | 8.1 actions/hr | **2.3 actions/hr** | **-71.6% scaling churn** |
+| **Average Cluster Utilization** | 62.0% | **78.0%** | **+25.8% resource efficiency** |
+| **SLA Compliance Rate** | 97.2% | **99.7%** | **+2.5% compliance gain** |
+| **System Availability** | 99.8% | **99.95%** | Production-grade stability |
+| **Decision-to-Launch Latency** | N/A (reactive) | **73 seconds** | Well within 90s SLA target |
 
 ---
 
-## 🏗️ Architecture & Control Flow
+## System Architecture
 
-The architecture is structured around an autonomous **MAPE-K** (Monitor, Analyze, Plan, Execute, Knowledge) control loop:
+The pipeline decouples offline symbolic discovery from real-time serverless execution via a closed MAPE-K feedback loop:
 
 ```mermaid
 flowchart TD
-    subgraph Data Layer
-        CW[AWS CloudWatch Telemetry] -->|1M+ Historical Metrics| S3[AWS S3 Parquet Lake]
-        S3 --> Dask[Dask Distributed Preprocessing]
+    subgraph DataLayer ["Data Ingestion & Storage"]
+        CW["AWS CloudWatch Telemetry"] -->|1M+ Historical Metrics| S3["AWS S3 Parquet Lake"]
+        S3 --> Dask["Dask Distributed Preprocessing"]
     end
 
-    subgraph Intelligence Discovery
-        Dask -->|50 Engineered Features| PySR[Symbolic Regression Discovery]
-        PySR -->|Closed-Form Equation| ModelStore[Model Registry / JSON]
+    subgraph Discovery ["Intelligence Discovery Pipeline"]
+        Dask -->|50 Engineered Features| PySR["Symbolic Regression Discovery"]
+        PySR -->|Closed-Form Equation| ModelStore["Model Registry (JSON)"]
     end
 
-    subgraph Production Runtime (MAPE-K)
-        LiveCW[CloudWatch Live Metrics] -->|Every 5-10s| Lambda[AWS Lambda Engine]
+    subgraph Runtime ["Production Runtime (MAPE-K Loop)"]
+        LiveCW["CloudWatch Live Metrics"] -->|Every 5-10s| Lambda["AWS Lambda Engine"]
         ModelStore -->|Cached Formula| Lambda
-        Lambda -->|Calculate Capacity| Guardrails{Hysteresis & Cooldown}
-        Guardrails -->|Suppressed Spikes| Skip[Hold Current State]
-        Guardrails -->|Legitimate Delta| ASG[AWS Auto Scaling Group API]
-        ASG -->|Scale In / Scale Out| EC2[EC2 Instance Fleet (3 AZs)]
-        Lambda -->|Decision Audit Trail| RDS[(PostgreSQL Audit Log)]
-        RDS --> Grafana[Grafana Observability Dashboard]
+        Lambda -->|Calculate Capacity| Guardrails{"Hysteresis & Cooldown"}
+        Guardrails -->|Suppressed Spikes| Skip["Hold Current State"]
+        Guardrails -->|Legitimate Delta| ASG["AWS Auto Scaling Group API"]
+        ASG -->|Scale In / Out| EC2["EC2 Fleet (3 AZs)"]
+        Lambda -->|Decision Audit Trail| RDS[("PostgreSQL Audit Log")]
+        RDS --> Grafana["Grafana Dashboard"]
     end
 ```
 
 ---
 
-## 🧮 Discovered Mathematical Model
+## Mathematical Formulation & Explainability
 
-Rather than deploying an opaque neural network with high serverless inference costs, the training pipeline ran across 150 generations using PySR to extract an interpretable mathematical formula:
+Unlike black-box deep learning architectures (e.g., LSTMs or Transformers), our discovery pipeline employs Symbolic Regression (PySR) across 150 evolutionary generations to identify Pareto-optimal closed-form equations balancing parsimony and predictive power:
 
 $$\text{instances} = \max\left(2, \min\left(10, \left\lceil 1.8 + 0.42 \cdot \text{CPU}_{\text{P99}} + 0.31 \cdot \log(\text{Memory}) + 0.15 \cdot \frac{\text{Net}_{\text{P95}}}{1000} \right\rceil\right)\right)$$
 
-- **Model Performance:** $R^2 = 0.89$ (Train) / $0.86$ (Validation)
-- **Error Rates:** $\text{MAPE} = 9.1\%$, $\text{MAE} = 1.4$ instances
-- **Model Complexity:** 5 operators, 7 terms (100% human-auditable)
+### Model Verification
+- **Coefficient of Determination ($R^2$):** 0.89 (Training) / 0.86 (Validation)
+- **Mean Absolute Percentage Error (MAPE):** 9.1%
+- **Mean Absolute Error (MAE):** 1.4 instances
+- **Model Complexity:** 5 basic arithmetic operators, 7 functional terms (100% mathematically auditable)
+- **Execution Profile:** 87 ms per evaluation cycle in AWS Lambda
 
 ---
 
-## 🛡️ Anti-Thrashing Safeguards
+## Control Theory & Anti-Thrashing Guardrails
 
-To eliminate erratic scaling oscillations and unpredictable cloud billing, two safety layers govern all execution decisions:
-1. **Hysteresis Smoothing:** Uses a rolling 30-second moving average window to filter out transient metric spikes.
-2. **Cooldown Guardrails:** Enforces a strict 5-minute cooldown timer between consecutive scaling events to allow new instances to warm up and stabilize.
+To prevent rapid oscillations between scale-out and scale-in states (thrashing), the execution tier enforces two control mechanisms:
+1. **Hysteresis Filtering:** A 30-second rolling moving average window filters high-frequency stochastic noise from CloudWatch telemetry.
+2. **Cooldown Invariant:** A strict 5-minute cooldown guardrail blocks downstream ASG mutations while newly instantiated EC2 instances bootstrap and stabilize.
 
 ---
 
-## 📁 Repository Structure
+## Project Structure
 
 ```text
-├── src/
-│   ├── lambda/
-│   │   ├── lambda_function.py      # Core MAPE-K serverless decision handler
-│   │   ├── safeguards.py           # Hysteresis and cooldown enforcement logic
-│   │   └── audit_logger.py         # PostgreSQL transaction logging
-│   ├── training/
-│   │   ├── data_pipeline.py        # Dask data ingestion & cleaning
-│   │   ├── feature_engineering.py  # 50+ rolling window & temporal features
-│   │   └── train_pysr.py           # Symbolic regression search pipeline
-│   └── config/
-│       └── config.yaml             # Thresholds, ASG names, and parameters
-├── tests/
-│   ├── test_lambda.py              # Unit tests for formula & decision paths
-│   └── test_safeguards.py          # Hysteresis & cooldown edge-case tests
-├── terraform/                      # Infrastructure as Code (Lambda, ASG, IAM)
-├── docs/                           # Architecture specifications & project report
-├── requirements.txt
-└── README.md
+├── mini_project.ipynb       # Data exploration, feature engineering & PySR model training
+├── lambda_function.py       # Production AWS Lambda MAPE-K engine & ASG controller
+├── requirements.txt         # Dependencies (PySR, Boto3, Dask, Pandas)
+├── Mini Project Report.docx # Academic research report and architectural specifications
+└── README.md                # System documentation, benchmarks & architecture
 ```
 
 ---
 
-## 🚀 Quickstart & Local Setup
+## Getting Started
 
-### 1. Prerequisites
+### Prerequisites
 - Python 3.9+
-- AWS CLI configured with appropriate permissions (`autoscaling:*`, `cloudwatch:*`)
-- Docker (optional, for local testing)
+- AWS CLI configured with permissions for Auto Scaling (`autoscaling:*`) and CloudWatch (`cloudwatch:*`)
+- Docker (optional, for local runtime emulation)
 
-### 2. Clone & Install Dependencies
+### Setup & Installation
 ```bash
-git clone https://github.com/yashavanthap55/Smart-Autoscaling-report.git
-cd Smart-Autoscaling-report
+git clone https://github.com/yashavanthap55/AWS-Smart-Autoscaling.git
+cd AWS-Smart-Autoscaling
 python -m venv venv
 source venv/bin/activate  # On Windows: .\venv\Scripts\activate
 pip install -r requirements.txt
 ```
 
-### 3. Run Unit & Integration Tests
+### Execution & Testing
 ```bash
-pytest tests/ -v
-```
+# 1. Run the PySR discovery and telemetry analysis notebook
+jupyter notebook mini_project.ipynb
 
-### 4. Deploy Serverless Decision Engine
-```bash
-cd terraform
-terraform init
-terraform apply
+# 2. Test Lambda decision engine locally
+python lambda_function.py
 ```
 
 ---
 
-## 👥 Contributors & Acknowledgments
+## Authors & Citation
 
 - **Yashavantha P** ([GitHub](https://github.com/yashavanthap55) • [LinkedIn](https://linkedin.com/in/yashavantha-p-a66607296))
 - **Arthik Jain**
 - **Harshavardhan D Naik**
 
-*Project completed under the guidance of **Prof. Narmada T**, School of Computer Science & Engineering, RV University, Bengaluru (2025–2026).*
-
+*Project developed under the supervision of **Prof. Narmada T**, School of Computer Science & Engineering, RV University, Bengaluru (Academic Year 2025–2026).*
